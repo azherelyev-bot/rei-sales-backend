@@ -1,15 +1,20 @@
 const axios = require('axios');
 
+const getAuthHeader = () => {
+  const key = process.env.FUB_API_KEY || '';
+  const encoded = Buffer.from(key + ':').toString('base64');
+  return 'Basic ' + encoded;
+};
+
 const fubClient = axios.create({
   baseURL: 'https://api.followupboss.com/v1',
-  auth: {
-    username: process.env.FUB_API_KEY,
-    password: ''  // FUB uses API key as username, empty password
-  },
-  headers: { 'Content-Type': 'application/json' }
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': getAuthHeader()
+  }
 });
 
-// ─── People (Leads) ──────────────────────────────────────────────────────────
+// People (Leads)
 async function getPerson(personId) {
   const { data } = await fubClient.get(`/people/${personId}`);
   return data;
@@ -22,7 +27,7 @@ async function getRecentPeople({ limit = 50, offset = 0 } = {}) {
   return data.people || [];
 }
 
-// ─── Calls ───────────────────────────────────────────────────────────────────
+// Calls
 async function getCall(callId) {
   const { data } = await fubClient.get(`/calls/${callId}`);
   return data;
@@ -42,7 +47,7 @@ async function getRecentCalls({ limit = 100, offset = 0 } = {}) {
   return data.calls || [];
 }
 
-// ─── Users (Reps) ────────────────────────────────────────────────────────────
+// Users (Reps)
 async function getUsers() {
   const { data } = await fubClient.get('/users');
   return data.users || [];
@@ -53,7 +58,7 @@ async function getUser(userId) {
   return data;
 }
 
-// ─── Activity feed (for idle tracking) ───────────────────────────────────────
+// Activity feed (for idle tracking)
 async function getActivityForUser(userId, { since } = {}) {
   const params = { userId, limit: 200 };
   if (since) params.since = since;
