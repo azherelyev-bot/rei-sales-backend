@@ -68,6 +68,25 @@ cron.schedule('0 0 * * *', async () => {
 
 // ─── Start ───────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
+// One-time seed endpoint — run once then remove
+app.get('/setup/seed-reps', async (req, res) => {
+  try {
+    const { getUsers } = require('./db/followupboss');
+    const { supabase } = require('./db/supabase');
+    const users = await getUsers();
+    const reps = users.filter(u => u.isActive);
+    for (const user of reps) {
+      await supabase.from('reps').upsert({
+        fub_user_id: String(user.id),
+        name: user.name,
+        email: user.email
+      }, { onConflict: 'fub_user_id' });
+    }
+    res.json({ success: true, seeded: reps.map(r => r.name) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 app.listen(PORT, () => {
   log('info', `REI Sales Backend running on port ${PORT}`);
 });
