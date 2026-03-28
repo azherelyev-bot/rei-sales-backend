@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const axios = require('axios');
 const cron = require('node-cron');
 const { handleCallCompleted, handleNewLead } = require('./routes/webhooks');
 const { computeDailyMetrics } = require('./pipeline/metrics');
@@ -9,12 +10,23 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+const fubHeaders = {
+  'Content-Type': 'application/json',
+  'X-System': 'REI-Sales-AI',
+  'X-System-Key': 'a5c50b177fcb97980fb3201d65b46824'
+};
+
+const fubAuth = {
+  username: process.env.FUB_API_KEY,
+  password: ''
+};
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', ts: new Date().toISOString() });
 });
 
-// FUB Webhooks
+// FUB Webhooks receiver
 app.post('/webhooks/fub', async (req, res) => {
   res.sendStatus(200);
   const { event, data } = req.body;
@@ -54,38 +66,45 @@ cron.schedule('0 0 * * *', async () => {
   await rollupDaily();
 });
 
-// Test FUB auth formats
-app.get('/setup/test-fub', async (req, res) => {
-  const axios = require('axios');
-  const key = process.env.FUB_API_KEY;
-  const results = {};
-
+// Register webhook with FUB
+app.get('/setup/register-webhook', async (req, res) => {
   try {
-    const r1 = await axios.get('https://api.followupboss.com/v1/users', {
-      headers: { 'Authorization': 'Bearer ' + key }
-    });
-    results.bearer = 'WORKS - ' + r1.data.users?.length + ' users';
-  } catch(e) { results.bearer = 'FAILED - ' + e.response?.status; }
+    const webhookUrl = 'https://rei-sales-backend-production.up.railway.app/webhooks/fub';
+    const events = ['callCompleted', 'personCreated', 'personUpdated'];
+    const results = [];
 
-  try {
-    const r2 = await axios.get('https://api.followupboss.com/v1/users', {
-      auth: { username: key, password: '' }
-    });
-    results.basic_auth = 'WORKS - ' + r2.data.users?.length + ' users';
-  } catch(e) { results.basic_auth = 'FAILED - ' + e.response?.status; }
-
-  try {
-    const encoded = Buffer.from(key + ':').toString('base64');
-    const r3 = await axios.get('https://api.followupboss.com/v1/users', {
-      headers: { 'Authorization': 'Basic ' + encoded }
-    });
-    results.basic_header = 'WORKS - ' + r3.data.users?.length + ' users';
-  } catch(e) { results.basic_header = 'FAILED - ' + e.response?.status; }
-
-  res.json({ key_prefix: key?.substring(0, 8), results });
+    for (const event of events) {
+      try {
+        const r = await axios.post(
+          'https://api.followupboss.com/v1/webhooks',
+          { event, url: webhookUrl },
+          { auth: fubAuth, headers: fubHeaders }
+        );
+        results.push({ event, status: 'registered', id: r.data.id });
+      } catch (e) {
+        results.push({ event, status: 'failed', error: e.response?.data || e.message });
+      }
+    }
+    res.json({ webhookUrl, results });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// Seed reps from FUB
+// Test FUB connection
+app.get('/setup/test-fub', async (req, res) => {
+  try {
+    const r = await axios.get('https://api.followupboss.com/v1/users', {
+      auth: fubAuth,
+      headers: fubHeaders
+    });
+    res.json({ success: true, users: r.data.users?.map(u => u.name) });
+  } catch (e) {
+    res.status(500).json({ error: e.response?.status, detail: e.response?.data });
+  }
+});
+
+// Seed reps
 app.get('/setup/seed-reps', async (req, res) => {
   try {
     const { getUsers } = require('./db/followupboss');
