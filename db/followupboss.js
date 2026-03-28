@@ -1,20 +1,18 @@
 const axios = require('axios');
 
-const getAuthHeader = () => {
-  const key = process.env.FUB_API_KEY || '';
-  const encoded = Buffer.from(key + ':').toString('base64');
-  return 'Basic ' + encoded;
-};
-
 const fubClient = axios.create({
   baseURL: 'https://api.followupboss.com/v1',
+  auth: {
+    username: process.env.FUB_API_KEY,
+    password: ''
+  },
   headers: {
     'Content-Type': 'application/json',
-    'Authorization': getAuthHeader()
+    'X-System': 'REI-Sales-AI',
+    'X-System-Key': 'a5c50b177fcb97980fb3201d65b46824'
   }
 });
 
-// People (Leads)
 async function getPerson(personId) {
   const { data } = await fubClient.get(`/people/${personId}`);
   return data;
@@ -27,7 +25,6 @@ async function getRecentPeople({ limit = 50, offset = 0 } = {}) {
   return data.people || [];
 }
 
-// Calls
 async function getCall(callId) {
   const { data } = await fubClient.get(`/calls/${callId}`);
   return data;
@@ -47,7 +44,6 @@ async function getRecentCalls({ limit = 100, offset = 0 } = {}) {
   return data.calls || [];
 }
 
-// Users (Reps)
 async function getUsers() {
   const { data } = await fubClient.get('/users');
   return data.users || [];
@@ -58,7 +54,6 @@ async function getUser(userId) {
   return data;
 }
 
-// Activity feed (for idle tracking)
 async function getActivityForUser(userId, { since } = {}) {
   const params = { userId, limit: 200 };
   if (since) params.since = since;
@@ -76,3 +71,4 @@ module.exports = {
   getUser,
   getActivityForUser
 };
+https://rei-sales-backend-production.up.railway.app/setup/seed-reps
